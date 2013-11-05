@@ -92,7 +92,7 @@ class cfgrammar:
     def __str__(self):
         table = []
         syms = list(self.terms) + list(self.nonterms)
-        table.append(["State"] + syms)
+        table.append(['State'] + syms)
         rules = list(self.reduce.values())
         lookup = dict(zip(rules, list(range(len(rules)))))
         m = max(list(map(len, map(str, self.terms))) + list(map(len, self.nonterms)))+2
@@ -117,26 +117,36 @@ class cfgrammar:
     # Recursively find state classes, shift & reduce actions.
     def derive_states(self, state):
         to_read = set()
+        # Determine every possible symbol that may be shifted.
         for s, tokens, i in state:
             if i < len(tokens):
                 to_read.add(tokens[i])
+        # Generate the states that are reached by each shift.
         for shift in to_read:
             next = set()
+            # For each rule of .s, add s. to the next state.
             for s, tokens, i in state:
                 if i < len(tokens) and tokens[i] == shift:
                     next.add((s, tokens, i+1))
+            # Close by expanding all non-terms in the next step.
             next = self.close_state(next)
+            # If an equivalent state hasn't yet been processed, recurse into it.
             if next not in self.states:
                 self.states.add(next)
                 self.derive_states(next)
             self.shift[(state, shift)] = next
     
+        # Determine reduction rules.
         for s, tokens, i in state:
             if len(tokens) == i:
+                # Find all possible lookahead symbols and determine the reduction.
                 for f in self.follow(s, set()):
                     self.reduce[(state, f)] = (s, tokens)
 
 
+    # Derived states are defined as sets of production/positions.
+    # To generate a proper parsing table, reduce these sets to a simple
+    # enumerated list of states.
     def normalize_states(self):
         numbering = dict(zip(sorted(self.states, key=lambda a:a != self.init_state), range(len(self.states))))
         self.states = list(range(len(self.states)))
