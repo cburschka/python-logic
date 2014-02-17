@@ -2,86 +2,66 @@
 
 import core as FO
 import symbols as SYM
-from cfg import cfgrammar
+from parser import symbol, cfg
+import lexer_fo as t
 
-def FoGrammar(signature):
-    return cfgrammar(nonterms, terms(signature), prods(signature), 'Formula', tree)
+def FoParser(signature):
+    return cfg.slr1_grammar(prods(**signature), Formula).slr1()
 
-def tree(s, z):
-    if s == 'Junctor':
-        return SYM.junctors[z[0]]
-    if s == 'Quantor':
-        return SYM.quantors[z[0]]
-    if s == 'Junction':
-        lp, f1, op, f2, rp = z
-        return op(f1, f2)
-    elif s == 'Quantified':
-        q, v, f = z
-        return q(v, f)
-    elif s == 'Negation':
-        n, f = z
-        return FO.Negation(f)
-    elif s == 'Relation':
-        return FO.Relation(z[0], z[2:-1:2])
-    elif s == 'Equality':
-        t1, eq, t2 = z
-        return FO.Equals(t1, t2)
-    elif s == 'Function':
-        return FO.Function(z[0], z[2:-1:2])
-    elif s == 'Constant':
-        return FO.Constant(z[0])
-    elif s == 'Variable':
-        return FO.Variable(z[0])
-    elif s == 'Term':
-        return z[0]
-    elif s == 'Formula':
-        return z[0]
+class Formula(symbol.NonTerm):
+    def fo(self):
+        return self.production[0].fo()
 
+class Term(symbol.NonTerm):
+    def fo(self):
+        return self.production[0].fo()
 
-nonterms = {
-    'Formula', 'Junction', 'Quantified', 'Relation', 
-    'Negation', 'Function', 'Junctor', 'Quantor', 
-    'Term', 'Equality', 'Variable', 'Constant'
-}
+class Junction(Formula):
+    ops = {SYM.AND: FO.And, SYM.OR: FO.Or, SYM.IMP: FO.Implies, SYM.EQ: FO.Equivalent}
 
-def terms(signature):
-  terms = [SYM.NOT, SYM.AND, SYM.OR, SYM.IMP, SYM.EQ, '=', '(', ',', ')', SYM.EXISTS, SYM.FORALL, -1]
-  return set(terms + list(signature.keys()))
+    def fo(self):
+        return self.ops[self.production[2].value](self.production[1].fo(), self.production[3].fo())
 
-def prods(signature):
-  prods = {
-    ('Formula', ('Junction',)),
-    ('Formula', ('Quantified',)),
-    ('Formula', ('Negation',)),
-    ('Formula', ('Relation',)),
-    ('Formula', ('Equality',)),
-    ('Junction', ('(', 'Formula', 'Junctor', 'Formula', ')')),
-    ('Quantified', ('Quantor', 'Variable', 'Formula')),
-    ('Negation', (SYM.NOT, 'Formula')),
-    ('Equality', ('Term', '=', 'Term')),
-    ('Junctor', (SYM.AND,)),
-    ('Junctor', (SYM.OR,)),
-    ('Junctor', (SYM.IMP,)),
-    ('Junctor', (SYM.EQ,)),
-    ('Quantor', (SYM.EXISTS,)),
-    ('Quantor', (SYM.FORALL,)),
-    ('Term', ('Variable',)),
-    ('Term', ('Constant',)),
-    ('Term', ('Function',)),
-    ('Variable', (-1,))
-  }
-  for symbol,d in signature.items():
-    t, r = d
-    if t in ('relation', 'function'):
-      ar = [',', 'Term']*(r-1)
-      expansion = tuple([symbol, '(', 'Term']+ar+[')'])
-      if t == 'relation':
-        prods.add(('Relation', expansion))
-      else:
-        prods.add(('Function', expansion))
-    else:
-      prods.add(('Constant', symbol))
-  return prods
+class Quantified(Formula):
+    qs = {SYM.EXISTS: FO.Exists, SYM.FORALL: FO.Forall}
+    def fo(self):
+        return self.qs[self.production[0].value](self.production[1].fo(), self.production[2].fo())
 
+class Negation(Formula):
+    def fo(self):
+        return FO.Negation(self.production[1].fo())
 
+class Relation(Formula):
+    def fo(self):
+        return FO.Relation(self.production[0].value, tuple(x.fo() for x in self.production[2:-1:2]))
 
+class Function(Term):
+    def fo(self):
+        return FO.Function(self.production[0].value, tuple(x.fo() for x in self.production[2:-1:2]))
+
+class Constant(Term):
+    def fo(self):
+        return FO.Function(self.production[0].value, tuple(x.fo() for x in self.production[2:-1:2]))
+
+class Equality(Formula):
+    def fo(self):
+        return FO.Equals(self.production[0].fo(), self.production[2].fo())
+
+class Variable(Term):
+    def fo(self):
+        return FO.Variable(self.production[0].value)
+
+def prods(relations={}, functions={}, constants=[]):
+    prods = {
+        Formula: {(Junction,), (Quantified,), (Negation,), (Relation,), (Equality,)},
+        Junction: {(t.LeftParen, Formula, t.Junctor, Formula, t.RightParen)},
+        Quantified: {(t.Quantor, Variable, Formula)},
+        Negation: {(t.Not, Formula)},
+        Equality: {(Term, t.Equality, Term)},
+        Term: {(Function,), (Constant,), (Variable,)},
+        Variable: {(t.Variable,)},
+        Relation: {((sym, t.LeftParen, Term) + (t.Comma, Term)*(d-1) + (t.RightParen,)) for (name, (sym, d)) in relations.items()},
+        Function: {((sym, t.LeftParen, Term) + (t.Comma, Term)*(d-1) + (t.RightParen,)) for (name, (sym, d)) in functions.items()},
+        Constant: {(sym,) for (name, sym) in constants.items()}
+    }
+    return prods

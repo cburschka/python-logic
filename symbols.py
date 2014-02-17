@@ -36,18 +36,4 @@ replace = [
     ('\\wedge' , AND),
 ]
 
-# Create sequence of symbol tokens
-def lex(string):
 
-    # Replace ASCII strings with the Unicode symbols they represent.
-    for x,y in replace:
-        string = string.replace(x, y)
-
-    # Add space around reserved symbols to isolate them.
-    for character in reserved:
-        string = string.replace(character, ' ' + character + ' ')
-
-    # The input string must have spaces wherever two consecutive tokens are non-FO symbols.
-    # This occurs only when a quantified expression starts with a signature symbol.
-    # eg. "∀varvar=var" can mean "∀varva r=var" or "∀var var=var"
-    return string.split()
