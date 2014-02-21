@@ -57,6 +57,7 @@ class Negation(Formula):
     return not self.formula.evaluate(structure, allocation)
   def __str__(self):
     return '¬' + str(self.formula)
+
 class Or(Formula):
   def __init__(self, formula1, formula2):
     self.formula1 = formula1
@@ -129,8 +130,6 @@ class Function(Formula):
   def __str__(self):
     return str(self.symbol) + '(' + ", ".join(map(str, self.terms)) + ')'
     
-
-
 class Structure:
   def __init__(self, universe, relations, functions, constants):
     self.universe = universe
@@ -154,5 +153,3 @@ class Variable(Term):
     return allocation.a[self.name]
   def __str__(self):
     return str(self.name)
-
-
